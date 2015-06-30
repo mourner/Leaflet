@@ -17,7 +17,8 @@ L.Map = L.Evented.extend({
 		trackResize: true,
 		markerZoomAnimation: true,
 		maxBoundsViscosity: 0.0,
-		bearing: 0
+		bearing: 0,
+		rotate: false
 	},
 
 	initialize: function (id, options) { // (HTMLElement or String, Object)
@@ -481,15 +482,20 @@ L.Map = L.Evented.extend({
 
 
 	// Rotation methods
-	// setBearing will work with just the 'theta' parameter. skipEvent and pivot are
+	// setBearing will work with just the 'theta' parameter. unfinished is
 	//   completely optional.
 	// Set theta to the desired bearing, in degrees.
-	// Set skipEvent to true in order to not fire the 'rotate' event. This is useful
+	// Set unfinished to true in order to not fire the 'rotateend' event. This is useful
 	//   when a lot of rotations are going to happen in a short period of time, e.g.
-	//   a touchscreen rotation. Make sure that a rotate event is sent at the end of
-	//   such a series of rotations.
-	setBearing: function(theta, skipEvent, pivot) {
-		if (!L.Browser.any3d) { return; }
+	//   a touchscreen rotation or dragging a rotation slider.
+	// Make sure that a final call with unfinished=false is sent at the end of such
+	//   a series of rotations.
+	setBearing: function(theta, unfinished) {
+		if (!L.Browser.any3d || !this.options.rotate) { return; }
+
+		if (!this._rotating) {
+			this.fire('rotatestart');
+		}
 
 		var rotatePanePos = this._getRotatePanePos();
 		var halfSize = this.getSize().divideBy(2);
@@ -502,10 +508,15 @@ L.Map = L.Evented.extend({
 
 		L.DomUtil.setPosition(this._rotatePane, this._rotatePanePos, this._bearing, this._rotatePanePos);
 
+
+		this.fire('rotate');
 		// We don't want to fire the rotate event on every frame of a touchscreen
 		//   gesture
-		if (!skipEvent) {
-			this.fire('rotate');
+		if (unfinished) {
+			this._rotating = true;
+		} else {
+			this.fire('rotateend');
+			this._rotating = false;
 		}
 	},
 
@@ -513,6 +524,11 @@ L.Map = L.Evented.extend({
 		return (this._bearing || 0) * L.DomUtil.RAD_TO_DEG;
 	},
 
+	// Some code will need to know if the map will fire a 'rotateend' event in the
+	//   near future, to account for animations and such
+	isRotating: function() {
+		return this._rotating;
+	},
 
 
 	// map initialization methods

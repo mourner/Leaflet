@@ -33,7 +33,7 @@ L.GridLayer = L.Layer.extend({
 
 		this._resetView();
 		this._update();
-		map.on('rotate', this._onMoveEnd, this);
+		map.on('rotateend', this._onMoveEnd, this);
 	},
 
 	beforeAdd: function (map) {
@@ -45,7 +45,7 @@ L.GridLayer = L.Layer.extend({
 		map._removeZoomLimit(this);
 		this._container = null;
 		this._tileZoom = null;
-		map.off('rotate', this._onMoveEnd, this);
+		map.off('rotateend', this._onMoveEnd, this);
 	},
 
 	bringToFront: function () {
@@ -409,7 +409,7 @@ L.GridLayer = L.Layer.extend({
 	},
 
 	_onMoveEnd: function () {
-		if (!this._map) { return; }
+		if (!this._map || this._map.isRotating()) { return; }
 
 		this._update();
 		this._pruneTiles();

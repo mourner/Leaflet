@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Rotation lock/follow control</title>
+
+	<link rel="stylesheet" href="../../dist/leaflet.css" />
+
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<link rel="stylesheet" href="../css/mobile.css" />
+	<script type="text/javascript" src="../../build/deps.js"></script>
+	<script src="../leaflet-include.js"></script>
+</head>
+<body>
+
+	<div id="map"></div>
+
+
+
+	<style>
+	.leaflet-bar.leaflet-control-rotate {
+
+	}
+
+	.leaflet-control-rotate .leaflet-control-rotate-glyphs {
+		position: absolute;
+		left:0;
+		right:0;
+		top:0;
+		bottom:0;
+	}
+
+	.leaflet-control-rotate .leaflet-control-rotate-north {
+		position: absolute;
+		left:0;
+		right:0;
+		top:4px;
+		bottom:0;
+		text-align: center;
+		font-size: 22px;
+	}
+
+	.leaflet-control-rotate .leaflet-control-rotate-arrow {
+		position: absolute;
+		left:0;
+		right:0;
+		top:0;
+		bottom:0;
+		font-size: 32px;
+		line-height: 16px;
+	}
+
+	</style>
+
+
+	<script type="text/javascript">
+	// A tri-state control for map rotation. States are:
+	// Locked (default)
+	// Unlocked (user can pinch-rotate)
+	// Follow (rotation follows device orientation, if available)
+
+	L.Control.RotateLock = L.Control.extend({
+
+		options: {
+			position: 'topleft',
+			closeOnZeroBearing: true
+		},
+
+		onAdd: function(map) {
+			this._onDeviceOrientation = L.Util.throttle(this._unthrottledOnDeviceOrientation, 100, this);
+
+			var container = L.DomUtil.create('div', 'leaflet-control-rotate leaflet-bar');
+
+// 			this.button = L.Control.Zoom.prototype._createButton.call(this, 'R', 'leaflet-control-rotate', 'leaflet-control-rotate', container, this._toggleLock);
+
+			var glyphs = this._glyphs = L.DomUtil.create('div', 'leaflet-control-rotate-glyphs');
+			var north = this._north = L.DomUtil.create('div', 'leaflet-control-rotate-north');
+			north.innerHTML = 'N';
+
+			var arrow = this._arrow = L.DomUtil.create('div', 'leaflet-control-rotate-arrow');
+			arrow.innerHTML = '&uarr;';
+
+
+			// Copy-pasted from L.Control.Zoom
+			var link = this._link = L.DomUtil.create('a', 'leaflet-control-rotate-toggle', container);
+			glyphs.appendChild(north);
+			glyphs.appendChild(arrow);
+			link.appendChild(glyphs);
+			link.href = '#';
+			link.title = 'leaflet-control-rotate-toggle';
+
+
+			L.DomEvent
+				.on(link, 'mousedown dblclick', L.DomEvent.stopPropagation)
+				.on(link, 'click', L.DomEvent.stop)
+				.on(link, 'click', this._cycleState, this)
+				.on(link, 'click', this._refocusOnMap, this);
+
+			if (!L.Browser.any3d) {
+				L.DomUtil.addClass(link, 'leaflet-disabled');
+			}
+
+			this._restyle();
+
+			map.on('rotate', this._restyle.bind(this));
+
+			// State flag
+			this._follow = false;
+			this._canFollow = false;
+
+			// Detect compass/accelerometer by responding to the first device orientation event ever.
+			L.DomEvent.on(window, 'deviceorientation', this._onFirstDeviceOrientation, this);
+
+			if (this.options.closeOnZeroBearing && map.getBearing() === 0) {
+				this._link.style.display = 'none';
+			}
+
+			return container;
+		},
+
+		_onFirstDeviceOrientation: function() {
+			this._canFollow = true;
+			L.DomEvent.off(window, 'deviceorientation', this._onFirstDeviceOrientation, this);
+		},
+
+		_cycleState: function(ev) {
+			if (!this._map) { return; }
+
+			if (this._map.options.rotate) {
+
+				if (this._follow || !this._canFollow) {
+					// New state is off
+
+					if (this._follow) {
+						this._follow = false;
+						L.DomEvent.off(window, 'deviceorientation', this._onDeviceOrientation, this);
+						this._alpha = undefined;
+					}
+
+					this._map.setBearing(0);
+					if (this.options.closeOnZeroBearing) {
+						this._link.style.display = 'none';
+					} else {
+						this._map.options.rotate = false;
+					}
+				} else {
+					// New state is follow device orientation
+					this._follow = true;
+					L.DomEvent.on(window, 'deviceorientation', this._onDeviceOrientation, this);
+				}
+			} else {
+				// New state is rotation enabled
+				this._map.options.rotate = true;
+			}
+			this._restyle();
+		},
+
+		_restyle: function() {
+			if (this._map.options.rotate) {
+				var bearing = this._map.getBearing();
+				this._link.style.color = 'inherit';
+				if (this.options.closeOnZeroBearing && bearing) {
+					this._link.style.display = 'block';
+				}
+
+				var cssTransform = 'rotate(' + bearing + 'deg)';
+				this._glyphs.style.transform = cssTransform;
+
+				if (this._follow) {
+					this._glyphs.style.color = 'orange';
+				} else {
+					this._glyphs.style.color = 'inherit';
+				}
+			} else {
+				this._link.style.color = '#bbb';
+			}
+		},
+
+		_unthrottledOnDeviceOrientation: function(ev) {
+			if (this._alpha === undefined) {
+				// Just store initial alpha
+				this._alpha = ev.alpha;
+				return;
+			}
+
+// 			console.log(this._alpha, ev.alpha, this._alpha - ev.alpha);
+
+			var alphaDelta = this._alpha - ev.alpha;
+
+			if (Math.abs(alphaDelta) > 1) {
+				this._map.setBearing(this._map.getBearing() - alphaDelta);
+				this._alpha = ev.alpha;
+			}
+		}
+
+	});
+
+
+
+		var osmUrl = 'http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+			osmAttrib = '&copy; <a href="http://openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+			osm = L.tileLayer(osmUrl, {maxZoom: 17, attribution: osmAttrib, rotate:true});
+
+		var map = new L.Map('map', {zoom: 15, layers: [osm], rotate: true}).setView([63.41, 10.41], 17);
+
+		map.addControl(rotateControl = new L.Control.RotateLock());
+
+		function logEvent(e) { console.log(e.type); }
+
+		function resetHeading(ev) {
+
+			console.log(ev);
+
+			if (ev.heading !== null) {
+				map.setBearing(ev.heading);
+			}
+
+		}
+
+		map.on('locationerror', logEvent);
+		map.on('locationfound', logEvent);
+		map.on('locationfound', resetHeading);
+
+// 		window.setInterval( function(){
+// 			map.locate({
+// 				setView: true,
+// // 				enableHighAccuracy: true
+// 				});
+// 		}, 2000);
+
+	</script>
+</body>
+</html>

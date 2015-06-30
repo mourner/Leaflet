@@ -34,7 +34,7 @@ L.Map.TouchZoom = L.Handler.extend({
 		if (vector.y < 0) { this._startBearing += 180; }
 
 		this._moved = false;
-// 		this._rotated = false;
+		this._rotated = false;
 		this._zooming = true;
 
 		map.stop();
@@ -66,14 +66,16 @@ L.Map.TouchZoom = L.Handler.extend({
 			this._center = map.containerPointToLatLng(map.latLngToContainerPoint(this._startCenter).subtract(delta));
 		}
 
-		var theta = Math.atan(vector.x / vector.y);
-		var bearingDelta = (theta - this._startTheta) * L.DomUtil.RAD_TO_DEG;
-		if (vector.y < 0) { bearingDelta += 180; }
-		if (bearingDelta) {
-			/// TODO: The pivot should be the last touch point, but zoomAnimation manages to
-			///   overwrite the rotate pane position. Maybe related to #3529.
-			map.setBearing( this._startBearing - bearingDelta, true );
-// 			this._rotated = true;
+		if (map.options.rotate) {
+			var theta = Math.atan(vector.x / vector.y);
+			var bearingDelta = (theta - this._startTheta) * L.DomUtil.RAD_TO_DEG;
+			if (vector.y < 0) { bearingDelta += 180; }
+			if (bearingDelta) {
+				/// TODO: The pivot should be the last touch point, but zoomAnimation manages to
+				///   overwrite the rotate pane position. Maybe related to #3529.
+				map.setBearing(this._startBearing - bearingDelta, true);
+				this._rotated = true;
+			}
 		}
 
 		if (scale === 1 && delta.x === 0 && delta.y === 0) { return; }
@@ -114,10 +116,9 @@ L.Map.TouchZoom = L.Handler.extend({
 
 		this._map._animateZoom(this._center, zoom, true, true);
 
-// 		if (this._rotated) {
-// 			this._map.fire('rotate');
-// 			console.log('Rotated');
-// 		}
+		if (this._rotated) {
+			this._map.setBearing(this._map.getBearing());
+		}
 	}
 });
 
